@@ -1,0 +1,25 @@
+{
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@/*": [
+        "src/*"
+      ]
+    },
+    "target": "es2020",
+    "module": "esnext",
+    "moduleResolution": "node",
+    "jsx": "preserve",
+    "types": [
+      "vite/client",
+      "element-plus/global"
+    ]
+  },
+  "include": [
+    "src/**/*"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist"
+  ]
+}

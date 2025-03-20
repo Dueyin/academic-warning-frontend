@@ -1,0 +1,88 @@
+// 全局样式
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  font-family: 'Helvetica Neue', Helvetica, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', '微软雅黑', Arial, sans-serif;
+}
+
+// 通用卡片样式
+.app-card {
+  margin-bottom: 20px;
+  border-radius: 4px;
+  
+  .app-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 15px 20px;
+    border-bottom: 1px solid #ebeef5;
+    
+    .title {
+      font-size: 16px;
+      font-weight: 500;
+      color: #303133;
+    }
+  }
+  
+  .app-card-body {
+    padding: 20px;
+  }
+}
+
+// 表格工具栏
+.table-toolbar {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 15px;
+  
+  .left {
+    display: flex;
+    gap: 10px;
+  }
+  
+  .right {
+    display: flex;
+    gap: 10px;
+  }
+}
+
+// 分页容器
+.pagination-container {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 20px;
+}
+
+// 表单样式
+.form-container {
+  max-width: 600px;
+  margin: 0 auto;
+  
+  .form-footer {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 20px;
+    gap: 10px;
+  }
+}
+
+// 详情页样式
+.detail-container {
+  .detail-header {
+    margin-bottom: 20px;
+    
+    h2 {
+      margin: 0;
+      font-size: 20px;
+      color: #303133;
+    }
+  }
+  
+  .detail-content {
+    background-color: #fff;
+    padding: 20px;
+    border-radius: 4px;
+    box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.1);
+  }
+} 

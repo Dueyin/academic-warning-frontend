@@ -1,0 +1,27 @@
+{
+  "name": "academic-monitoring-system",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@element-plus/icons-vue": "^2.3.1",
+    "axios": "^1.8.3",
+    "element-plus": "^2.9.6",
+    "vue": "^3.4.21",
+    "vue-router": "^4.5.0",
+    "vuex": "^4.1.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^5.0.4",
+    "sass": "^1.86.0",
+    "unplugin-auto-import": "^19.1.1",
+    "unplugin-vue-components": "^28.4.1",
+    "vite": "^6.2.1",
+    "vite-plugin-vue-devtools": "^7.7.2"
+  }
+}
