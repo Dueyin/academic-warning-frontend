@@ -1,5 +1,5 @@
 <template>
-  <div class="dashboard-container">
+  <div class="dashboard-container" v-loading="loading">
     <!-- 统计卡片区域 -->
     <el-row :gutter="20">
       <el-col :span="6">
@@ -7,7 +7,7 @@
           <div class="stat-content">
             <el-icon class="stat-icon"><User /></el-icon>
             <div class="stat-info">
-              <div class="stat-value">{{ statistics.totalStudents }}</div>
+              <div class="stat-value">{{ statistics.totalStudents || 0 }}</div>
               <div class="stat-label">学生总数</div>
             </div>
           </div>
@@ -19,7 +19,7 @@
           <div class="stat-content">
             <el-icon class="stat-icon"><Warning /></el-icon>
             <div class="stat-info">
-              <div class="stat-value">{{ statistics.totalWarnings }}</div>
+              <div class="stat-value">{{ statistics.totalWarnings || 0 }}</div>
               <div class="stat-label">预警总数</div>
             </div>
           </div>
@@ -31,7 +31,7 @@
           <div class="stat-content">
             <el-icon class="stat-icon"><Finished /></el-icon>
             <div class="stat-info">
-              <div class="stat-value">{{ statistics.resolvedWarnings }}</div>
+              <div class="stat-value">{{ statistics.resolvedWarnings || 0 }}</div>
               <div class="stat-label">已解决预警</div>
             </div>
           </div>
@@ -43,7 +43,7 @@
           <div class="stat-content">
             <el-icon class="stat-icon"><School /></el-icon>
             <div class="stat-info">
-              <div class="stat-value">{{ statistics.totalCourses }}</div>
+              <div class="stat-value">{{ statistics.totalCourses || 0 }}</div>
               <div class="stat-label">课程数量</div>
             </div>
           </div>
@@ -60,9 +60,13 @@
               <span>预警类型分布</span>
             </div>
           </template>
-          <div class="chart-container">
+          <div class="chart-container" v-loading="chartsLoading">
             <!-- 这里可以集成 ECharts 等图表库 -->
-            <div class="chart-placeholder">预警类型饼图</div>
+            <div class="chart-placeholder" v-if="!chartData.warningTypes">预警类型饼图</div>
+            <div v-else>
+              <!-- 未来可以替换为真实图表 -->
+              <pre>{{ chartData.warningTypes }}</pre>
+            </div>
           </div>
         </el-card>
       </el-col>
@@ -74,9 +78,13 @@
               <span>预警趋势</span>
             </div>
           </template>
-          <div class="chart-container">
+          <div class="chart-container" v-loading="chartsLoading">
             <!-- 这里可以集成 ECharts 等图表库 -->
-            <div class="chart-placeholder">预警趋势折线图</div>
+            <div class="chart-placeholder" v-if="!chartData.warningTrends">预警趋势折线图</div>
+            <div v-else>
+              <!-- 未来可以替换为真实图表 -->
+              <pre>{{ chartData.warningTrends }}</pre>
+            </div>
           </div>
         </el-card>
       </el-col>
@@ -87,13 +95,18 @@
       <template #header>
         <div class="card-header">
           <span>最近预警</span>
-          <el-button type="primary" size="small" @click="handleViewAll">
-            查看全部
-          </el-button>
+          <el-button-group>
+            <el-button type="primary" size="small" @click="refreshData">
+              <el-icon><Refresh /></el-icon> 刷新
+            </el-button>
+            <el-button type="primary" size="small" @click="handleViewAll">
+              查看全部
+            </el-button>
+          </el-button-group>
         </div>
       </template>
       
-      <el-table :data="recentWarnings" style="width: 100%">
+      <el-table :data="recentWarnings" style="width: 100%" v-loading="warningsLoading">
         <el-table-column prop="id" label="ID" width="80" />
         <el-table-column prop="studentName" label="学生姓名" width="120" />
         <el-table-column prop="studentNumber" label="学号" width="120" />
@@ -119,68 +132,130 @@
           </template>
         </el-table-column>
       </el-table>
+      
+      <div v-if="recentWarnings.length === 0 && !warningsLoading" class="empty-data">
+        <el-empty description="暂无预警数据" />
+      </div>
     </el-card>
   </div>
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { User, Warning, Finished, School } from '@element-plus/icons-vue'
+import { ElMessage } from 'element-plus'
+import { User, Warning, Finished, School, Refresh } from '@element-plus/icons-vue'
+import { getDashboardStatistics } from '../../api/statistics'
+import { getWarningTypeDistribution, getWarningTrends } from '../../api/statistics'
+import { getRecentWarnings } from '../../api/warnings'
 
 const router = useRouter()
 
+// 加载状态
+const loading = ref(false)
+const chartsLoading = ref(false)
+const warningsLoading = ref(false)
+
 // 统计数据
 const statistics = ref({
-  totalStudents: 1256,
-  totalWarnings: 78,
-  resolvedWarnings: 43,
-  totalCourses: 145
+  totalStudents: 0,
+  totalWarnings: 0,
+  resolvedWarnings: 0,
+  totalCourses: 0
+})
+
+// 图表数据
+const chartData = ref({
+  warningTypes: null,
+  warningTrends: null
 })
 
 // 最近预警数据
-const recentWarnings = ref([
-  {
-    id: 1,
-    studentName: '李明',
-    studentNumber: '20240101',
-    title: '期中考试成绩低于60分预警',
-    createTime: '2024-03-25 10:30',
-    status: 'PENDING'
-  },
-  {
-    id: 2,
-    studentName: '王芳',
-    studentNumber: '20240102',
-    title: '连续两周缺勤预警',
-    createTime: '2024-03-24 14:20',
-    status: 'RESOLVED'
-  },
-  {
-    id: 3,
-    studentName: '张伟',
-    studentNumber: '20240103',
-    title: '综合成绩排名下降预警',
-    createTime: '2024-03-24 09:15',
-    status: 'PENDING'
-  },
-  {
-    id: 4,
-    studentName: '刘洋',
-    studentNumber: '20240104',
-    title: '挂科数量超过2门预警',
-    createTime: '2024-03-23 16:45',
-    status: 'PENDING'
-  },
-  {
-    id: 5,
-    studentName: '赵敏',
-    studentNumber: '20240105',
-    title: '学业成绩连续两学期下降预警',
-    createTime: '2024-03-23 11:30',
-    status: 'RESOLVED'
+const recentWarnings = ref([])
+
+// 获取仪表盘统计数据
+const fetchDashboardStatistics = async () => {
+  try {
+    loading.value = true
+    const response = await getDashboardStatistics()
+    
+    console.log('获取到仪表盘统计数据:', response)
+    
+    // 设置统计数据
+    statistics.value = {
+      totalStudents: response.totalStudents || 0,
+      totalWarnings: response.totalWarnings || 0,
+      resolvedWarnings: response.resolvedWarnings || 0,
+      totalCourses: response.totalCourses || 0
+    }
+  } catch (error) {
+    console.error('获取仪表盘统计数据失败:', error)
+    ElMessage.error('获取统计数据失败，请稍后重试')
+    
+    // 设置默认值以防API调用失败
+    statistics.value = {
+      totalStudents: 0,
+      totalWarnings: 0,
+      resolvedWarnings: 0,
+      totalCourses: 0
+    }
+  } finally {
+    loading.value = false
   }
-])
+}
+
+// 获取图表数据
+const fetchChartData = async () => {
+  try {
+    chartsLoading.value = true
+    
+    // 获取预警类型分布
+    const typeDistribution = await getWarningTypeDistribution()
+    chartData.value.warningTypes = typeDistribution
+    
+    // 获取预警趋势
+    const trends = await getWarningTrends({
+      period: 'MONTHLY',
+      months: 6
+    })
+    chartData.value.warningTrends = trends
+    
+    console.log('获取到图表数据:', chartData.value)
+  } catch (error) {
+    console.error('获取图表数据失败:', error)
+    ElMessage.warning('获取图表数据失败，将显示默认图表')
+  } finally {
+    chartsLoading.value = false
+  }
+}
+
+// 获取最近预警
+const fetchRecentWarnings = async () => {
+  try {
+    warningsLoading.value = true
+    const warnings = await getRecentWarnings(5)
+    
+    console.log('获取到最近预警:', warnings)
+    recentWarnings.value = warnings || []
+  } catch (error) {
+    console.error('获取最近预警失败:', error)
+    ElMessage.error('获取预警数据失败，请稍后重试')
+    recentWarnings.value = []
+  } finally {
+    warningsLoading.value = false
+  }
+}
+
+// 刷新所有数据
+const refreshData = async () => {
+  await Promise.all([
+    fetchDashboardStatistics(),
+    fetchChartData(),
+    fetchRecentWarnings()
+  ])
+  
+  ElMessage.success('数据已刷新')
+}
 
 // 查看全部预警
 const handleViewAll = () => {
@@ -191,6 +266,11 @@ const handleViewAll = () => {
 const handleDetail = (row) => {
   router.push(`/admin/warnings/${row.id}`)
 }
+
+// 页面加载时获取数据
+onMounted(() => {
+  refreshData()
+})
 </script>
 
 <style scoped>
@@ -260,5 +340,9 @@ const handleDetail = (row) => {
 
 .recent-warnings-card {
   margin-bottom: 20px;
+}
+
+.empty-data {
+  padding: 30px 0;
 }
 </style> 

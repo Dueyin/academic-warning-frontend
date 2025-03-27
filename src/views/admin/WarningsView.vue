@@ -219,7 +219,7 @@
               style="width: 100%"
             >
               <el-option
-                v-for="item in studentOptions"
+                v-for="item in studentList"
                 :key="item.id"
                 :label="`${item.name} (${item.studentNumber})`"
                 :value="item.id"
@@ -288,9 +288,18 @@
 </template>
 
 <script setup>
-import { ref, reactive } from 'vue'
+import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, Download } from '@element-plus/icons-vue'
+import { 
+  getAllWarnings, 
+  getWarningById, 
+  createWarning, 
+  updateWarning, 
+  resolveWarning, 
+  deleteWarning,
+  getWarningTypes 
+} from '../../api/warnings'
 
 // 筛选表单
 const filterForm = reactive({
@@ -303,68 +312,35 @@ const filterForm = reactive({
 
 // 预警类型选项
 const warningTypes = ref([
-  { label: '成绩预警', value: 'GRADE' },
-  { label: '考勤预警', value: 'ATTENDANCE' },
-  { label: '行为预警', value: 'BEHAVIOR' },
-  { label: '综合预警', value: 'COMPREHENSIVE' }
+  { label: '单科成绩预警', value: 'COURSE_GRADE' },
+  { label: '多科不及格预警', value: 'MULTIPLE_FAIL' },
+  { label: '学期平均分预警', value: 'SEMESTER_AVERAGE' },
+  { label: '严重学业危机预警', value: 'SEVERE' }
 ])
 
-// 预警等级选项
+// 预警级别选项
 const warningLevels = ref([
-  { label: '轻度', value: 'LOW' },
-  { label: '中度', value: 'MEDIUM' },
-  { label: '严重', value: 'HIGH' }
+  { label: '一般预警', value: 1 },
+  { label: '中度预警', value: 2 },
+  { label: '严重预警', value: 3 }
 ])
 
 // 状态选项
 const statusOptions = ref([
-  { label: '未解决', value: 'PENDING' },
+  { label: '新建', value: 'NEW' },
+  { label: '已读', value: 'READ' },
+  { label: '处理中', value: 'PROCESSED' },
   { label: '已解决', value: 'RESOLVED' }
 ])
 
 // 表格数据
 const loading = ref(false)
-const warningList = ref([
-  {
-    id: 1,
-    studentName: '李明',
-    studentNumber: '20240101',
-    title: '期中考试成绩低于60分预警',
-    warningType: 'GRADE',
-    level: 'MEDIUM',
-    content: '学生在高等数学期中考试中得分55分，低于及格线。建议加强辅导和督促学习。',
-    createTime: '2024-03-25 10:30',
-    status: 'PENDING'
-  },
-  {
-    id: 2,
-    studentName: '王芳',
-    studentNumber: '20240102',
-    title: '连续两周缺勤预警',
-    warningType: 'ATTENDANCE',
-    level: 'HIGH',
-    content: '学生在过去两周连续缺席四次课程，可能存在学习态度问题，建议及时干预。',
-    createTime: '2024-03-24 14:20',
-    status: 'RESOLVED',
-    solution: '已与学生沟通，学生因家庭原因暂时请假，已补交请假条。'
-  },
-  {
-    id: 3,
-    studentName: '张伟',
-    studentNumber: '20240103',
-    title: '综合成绩排名下降预警',
-    warningType: 'COMPREHENSIVE',
-    level: 'LOW',
-    content: '学生综合成绩排名从上学期的前20%下降到当前的前40%，建议关注。',
-    createTime: '2024-03-24 09:15',
-    status: 'PENDING'
-  }
-])
+const warningList = ref([])
 
 // 分页相关
 const currentPage = ref(1)
 const pageSize = ref(10)
-const total = ref(100)
+const total = ref(0)
 
 // 预警详情抽屉
 const drawerVisible = ref(false)
@@ -385,11 +361,7 @@ const form = reactive({
 
 // 学生选择
 const studentLoading = ref(false)
-const studentOptions = ref([
-  { id: 1, name: '李明', studentNumber: '20240101' },
-  { id: 2, name: '王芳', studentNumber: '20240102' },
-  { id: 3, name: '张伟', studentNumber: '20240103' }
-])
+const studentList = ref([])
 
 // 表单验证规则
 const rules = {
@@ -416,10 +388,10 @@ const rules = {
 // 获取预警类型标签样式
 const getWarningTypeTag = (type) => {
   const map = {
-    GRADE: 'danger',
-    ATTENDANCE: 'warning',
-    BEHAVIOR: 'info',
-    COMPREHENSIVE: 'primary'
+    COURSE_GRADE: 'danger',
+    MULTIPLE_FAIL: 'warning',
+    SEMESTER_AVERAGE: 'info',
+    SEVERE: 'danger'
   }
   return map[type] || 'info'
 }
@@ -427,10 +399,10 @@ const getWarningTypeTag = (type) => {
 // 获取预警类型显示文本
 const getWarningTypeLabel = (type) => {
   const map = {
-    GRADE: '成绩预警',
-    ATTENDANCE: '考勤预警',
-    BEHAVIOR: '行为预警',
-    COMPREHENSIVE: '综合预警'
+    COURSE_GRADE: '单科成绩预警',
+    MULTIPLE_FAIL: '多科不及格预警',
+    SEMESTER_AVERAGE: '学期平均分预警',
+    SEVERE: '严重学业危机预警'
   }
   return map[type] || type
 }
@@ -438,9 +410,9 @@ const getWarningTypeLabel = (type) => {
 // 获取预警等级标签样式
 const getWarningLevelTag = (level) => {
   const map = {
-    LOW: 'info',
-    MEDIUM: 'warning',
-    HIGH: 'danger'
+    1: 'info',
+    2: 'warning',
+    3: 'danger'
   }
   return map[level] || 'info'
 }
@@ -448,20 +420,86 @@ const getWarningLevelTag = (level) => {
 // 获取预警等级显示文本
 const getWarningLevelLabel = (level) => {
   const map = {
-    LOW: '轻度',
-    MEDIUM: '中度',
-    HIGH: '严重'
+    1: '一般预警',
+    2: '中度预警',
+    3: '严重预警'
   }
   return map[level] || level
 }
 
+// 获取预警列表
+const fetchWarnings = async () => {
+  try {
+    loading.value = true
+    
+    // 构造查询参数
+    const params = {
+      page: currentPage.value - 1,
+      size: pageSize.value,
+      studentNumber: filterForm.studentNumber,
+      studentName: filterForm.studentName,
+      warningType: filterForm.warningType,
+      status: filterForm.status
+    }
+    
+    // 处理日期范围
+    if (filterForm.dateRange && filterForm.dateRange.length === 2) {
+      params.startDate = filterForm.dateRange[0]
+      params.endDate = filterForm.dateRange[1]
+    }
+    
+    console.log('预警查询参数:', params)
+    
+    // 调用API获取预警列表
+    const response = await getAllWarnings(params)
+    console.log('获取到的预警列表:', response)
+    
+    // 如果后端返回的是分页格式的数据
+    if (response.content && Array.isArray(response.content)) {
+      warningList.value = response.content
+      total.value = response.totalElements || 0
+    } 
+    // 如果后端直接返回数组
+    else if (Array.isArray(response)) {
+      warningList.value = response
+      total.value = response.length
+    }
+    // 其他情况设置为空数组
+    else {
+      warningList.value = []
+      total.value = 0
+    }
+  } catch (error) {
+    console.error('获取预警列表失败:', error)
+    ElMessage.error('获取预警列表失败，请稍后重试')
+    warningList.value = []
+    total.value = 0
+  } finally {
+    loading.value = false
+  }
+}
+
+// 获取预警类型列表
+const fetchWarningTypes = async () => {
+  try {
+    const types = await getWarningTypes()
+    if (Array.isArray(types) && types.length > 0) {
+      warningTypes.value = types.map(type => ({
+        label: type.name,
+        value: type.code
+      }))
+    }
+    console.log('获取到的预警类型:', warningTypes.value)
+  } catch (error) {
+    console.error('获取预警类型失败:', error)
+    // 使用默认值
+  }
+}
+
 // 搜索
 const handleSearch = () => {
-  console.log('搜索条件：', filterForm)
-  loading.value = true
-  setTimeout(() => {
-    loading.value = false
-  }, 500)
+  currentPage.value = 1
+  fetchWarnings()
 }
 
 // 重置搜索条件
@@ -475,18 +513,27 @@ const handleReset = () => {
 // 分页大小改变
 const handleSizeChange = (val) => {
   pageSize.value = val
-  handleSearch()
+  fetchWarnings()
 }
 
 // 页码改变
 const handleCurrentChange = (val) => {
   currentPage.value = val
-  handleSearch()
+  fetchWarnings()
 }
 
 // 查看详情
-const handleDetail = (row) => {
-  currentWarning.value = { ...row }
+const handleDetail = async (row) => {
+  try {
+    // 可以从API获取最新详情
+    const warningDetail = await getWarningById(row.id)
+    console.log('获取到的预警详情:', warningDetail)
+    currentWarning.value = warningDetail
+  } catch (error) {
+    console.error('获取预警详情失败:', error)
+    // 使用表格中的数据作为备选
+    currentWarning.value = { ...row }
+  }
   drawerVisible.value = true
 }
 
@@ -525,18 +572,25 @@ const handleDelete = (row) => {
       type: 'warning'
     }
   )
-    .then(() => {
-      // 调用删除API
-      ElMessage.success('删除成功')
-      handleSearch()
+    .then(async () => {
+      try {
+        // 调用删除API
+        await deleteWarning(row.id)
+        ElMessage.success('删除成功')
+        fetchWarnings()
+      } catch (error) {
+        console.error('删除预警失败:', error)
+        ElMessage.error('删除预警失败，请稍后重试')
+      }
     })
     .catch(() => {
-      // 取消删除
+      // 取消删除，不做任何操作
     })
 }
 
 // 导出预警
 const handleExport = () => {
+  // 实际导出功能可以通过后端API实现
   ElMessage.success('预警数据导出成功')
 }
 
@@ -544,6 +598,7 @@ const handleExport = () => {
 const remoteStudentSearch = (query) => {
   if (query) {
     studentLoading.value = true
+    // 可以实现搜索学生的API调用
     setTimeout(() => {
       studentLoading.value = false
     }, 500)
@@ -554,23 +609,39 @@ const remoteStudentSearch = (query) => {
 const handleSubmit = async () => {
   if (!formRef.value) return
   
-  await formRef.value.validate(async (valid) => {
-    if (valid) {
-      if (dialogType.value === 'add') {
-        // 新增预警
-        console.log('新增预警：', form)
-        ElMessage.success('新增预警成功')
-      } else {
-        // 解决预警
-        console.log('解决预警：', form)
-        ElMessage.success('预警已标记为已解决')
+  try {
+    await formRef.value.validate(async (valid) => {
+      if (valid) {
+        if (dialogType.value === 'add') {
+          // 创建预警
+          await createWarning(form)
+          ElMessage.success('预警创建成功')
+        } else if (dialogType.value === 'resolve') {
+          // 解决预警
+          await resolveWarning(currentWarning.value.id, form.solution)
+          ElMessage.success('预警已解决')
+        }
+        
+        dialogVisible.value = false
+        fetchWarnings()
+        
+        // 如果抽屉是打开的，刷新详情
+        if (drawerVisible.value) {
+          handleDetail({ id: currentWarning.value.id })
+        }
       }
-      dialogVisible.value = false
-      drawerVisible.value = false
-      handleSearch()
-    }
-  })
+    })
+  } catch (error) {
+    console.error('提交表单失败:', error)
+    ElMessage.error('操作失败，请稍后重试')
+  }
 }
+
+// 页面加载时获取数据
+onMounted(() => {
+  fetchWarnings()
+  fetchWarningTypes()
+})
 </script>
 
 <style scoped>

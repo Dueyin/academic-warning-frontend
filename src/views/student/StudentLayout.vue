@@ -1,11 +1,12 @@
 <template>
-  <el-container class="layout-container">
-    <el-aside width="200px">
+  <el-container class="layout-container" v-loading="loading">
+    <el-aside :width="isCollapse ? '64px' : '200px'" class="aside-container">
       <el-menu
         :default-active="activeMenu"
         class="el-menu-vertical"
         :router="true"
         :collapse="isCollapse"
+        :collapse-transition="false"
       >
         <el-menu-item index="/student">
           <el-icon><Monitor /></el-icon>
@@ -32,7 +33,7 @@
     <el-container>
       <el-header>
         <div class="header-left">
-          <el-button type="text" @click="toggleCollapse">
+          <el-button text @click="toggleCollapse">
             <el-icon>
               <component :is="isCollapse ? 'Expand' : 'Fold'" />
             </el-icon>
@@ -42,7 +43,7 @@
         <div class="header-right">
           <el-dropdown @command="handleCommand">
             <span class="user-info">
-              {{ userStore.userInfo.name }}
+              {{ userInfo?.name || '用户' }}
               <el-icon><ArrowDown /></el-icon>
             </span>
             <template #dropdown>
@@ -55,16 +56,20 @@
       </el-header>
       
       <el-main>
-        <router-view />
+        <router-view v-if="!loading" />
+        <div v-else class="loading-placeholder">
+          <el-empty description="加载中..." />
+        </div>
       </el-main>
     </el-container>
   </el-container>
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useUserStore } from '../../stores/user'
+import { ElMessage } from 'element-plus'
 import {
   Monitor,
   User,
@@ -79,6 +84,8 @@ const route = useRoute()
 const router = useRouter()
 const userStore = useUserStore()
 const isCollapse = ref(false)
+const userInfo = ref(null)
+const loading = ref(true)
 
 const activeMenu = computed(() => route.path)
 
@@ -92,16 +99,70 @@ const handleCommand = (command) => {
     router.push('/login')
   }
 }
+
+const fetchUserInfo = async () => {
+  try {
+    loading.value = true
+    
+    // 首先检查是否已经有token
+    if (!userStore.token) {
+      ElMessage.error('您尚未登录或登录已过期')
+      router.push('/login')
+      return
+    }
+    
+    // 如果已经有用户信息了，直接使用
+    if (userStore.userInfo) {
+      userInfo.value = userStore.userInfo
+      loading.value = false
+      return
+    }
+    
+    // 否则获取用户信息
+    userInfo.value = await userStore.getUserInfo()
+  } catch (error) {
+    console.error('获取用户信息失败:', error)
+    ElMessage.error('获取用户信息失败，请重新登录')
+    userStore.resetState()
+    router.push('/login')
+  } finally {
+    loading.value = false
+  }
+}
+
+onMounted(() => {
+  fetchUserInfo()
+})
 </script>
 
 <style scoped>
 .layout-container {
   height: 100vh;
+  min-height: 100vh;
+  overflow: hidden;
+}
+
+.el-container {
+  position: relative;
+  height: 100%;
+  width: 100%;
+  min-width: 0;
+  transition: margin-left 0.3s ease;
 }
 
 .el-aside {
   background-color: #304156;
-  transition: width 0.3s;
+  transition: width 0.3s ease;
+  overflow: hidden;
+  z-index: 10;
+}
+
+.aside-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  position: relative;
+  box-shadow: 0 1px 4px rgba(0, 21, 41, 0.08);
 }
 
 .el-menu {
@@ -110,6 +171,11 @@ const handleCommand = (command) => {
 
 .el-menu-vertical {
   height: 100%;
+  width: 100%;
+}
+
+.el-menu-vertical:not(.el-menu--collapse) {
+  width: 200px;
 }
 
 .el-header {
@@ -145,6 +211,7 @@ const handleCommand = (command) => {
 .el-main {
   background-color: #f0f2f5;
   padding: 20px;
+  overflow-x: hidden;
 }
 
 :deep(.el-menu-item) {
@@ -158,5 +225,12 @@ const handleCommand = (command) => {
 
 :deep(.el-menu-item:hover) {
   background-color: #263445;
+}
+
+.loading-placeholder {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 400px;
 }
 </style> 

@@ -84,15 +84,18 @@ const handleLogin = async () => {
         ElMessage.success('登录成功')
         
         // 根据用户角色跳转到不同页面
-        const role = userStore.userRole
-        console.log('用户角色:', role)
+        const roles = result.roles
+        console.log('用户角色:', roles)
         
-        if (role === 'ROLE_ADMIN') {
+        if (roles.includes('ROLE_ADMIN')) {
           console.log('跳转到管理员页面')
           router.push('/admin')
-        } else if (role === 'ROLE_STUDENT') {
+        } else if (roles.includes('ROLE_STUDENT')) {
           console.log('跳转到学生页面')
           router.push('/student')
+        } else if (roles.includes('ROLE_TEACHER')) {
+          console.log('跳转到教师页面')
+          router.push('/teacher')
         } else {
           console.warn('未知的用户角色，默认跳转到首页')
           router.push('/home')

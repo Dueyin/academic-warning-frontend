@@ -1,95 +1,90 @@
 import { defineStore } from 'pinia'
-import { login as loginApi, logout as logoutApi } from '../api/user'
+import { login, logout, getUserInfo } from '../api/user'
 
 export const useUserStore = defineStore('user', {
     state: () => ({
         token: localStorage.getItem('token') || '',
-        userInfo: JSON.parse(localStorage.getItem('userInfo') || '{}')
+        userInfo: null,
+        roles: []
     }),
 
     getters: {
         isLoggedIn: (state) => !!state.token,
-        userRole: (state) => {
-            // 尝试从不同可能的格式中获取角色信息
-            if (state.userInfo.roles && state.userInfo.roles.length) {
-                return state.userInfo.roles[0];
-            }
-            if (state.userInfo.role) {
-                return state.userInfo.role;
-            }
-            if (state.userInfo.authorities && state.userInfo.authorities.length) {
-                return state.userInfo.authorities[0].authority;
-            }
-            return '';
-        }
+        isAdmin: (state) => state.roles.includes('ROLE_ADMIN'),
+        isStudent: (state) => state.roles.includes('ROLE_STUDENT'),
+        isTeacher: (state) => state.roles.includes('ROLE_TEACHER')
     },
 
     actions: {
         async login(loginForm) {
             try {
-                const res = await loginApi(loginForm)
-                console.log('登录响应:', res)
+                const response = await login(loginForm)
+                console.log('登录响应:', response)
 
-                // 适应可能的不同响应格式
-                let token = '';
-                let user = {};
+                // 从响应中提取token、roles和基本用户信息
+                this.token = response.token || response.accessToken || ''
+                this.roles = response.roles || []
 
-                // 检查可能的格式1: res.data.token 和 res.data.user
-                if (res.data && res.data.token && res.data.user) {
-                    token = res.data.token;
-                    user = res.data.user;
-                }
-                // 检查可能的格式2: res.token 和 res.user 
-                else if (res.token && res.user) {
-                    token = res.token;
-                    user = res.user;
-                }
-                // 检查可能的格式3: Spring Security 标准格式
-                else if (res.access_token || res.accessToken) {
-                    token = res.access_token || res.accessToken;
-                    // 可能需要单独获取用户信息
-                    user = { username: loginForm.username };
-                    if (res.authorities) {
-                        user.authorities = res.authorities;
+                // 如果响应中包含用户信息，则直接使用
+                if (response.name || response.username) {
+                    this.userInfo = {
+                        id: response.id,
+                        name: response.name,
+                        username: response.username,
+                        email: response.email,
+                        roles: response.roles
                     }
                 }
-                // 检查可能的格式4: 自定义格式
-                else if (typeof res === 'object') {
-                    console.log('未识别的响应格式，尝试解析:', res);
-                    token = res.token || res.access_token || res.accessToken || '';
-                    user = res.user || res.userInfo || res.userData || res;
+
+                localStorage.setItem('token', this.token)
+
+                // 如果需要，尝试获取更详细的用户信息
+                if (this.token && !this.userInfo) {
+                    await this.getUserInfo()
                 }
 
-                if (!token) {
-                    console.error('无法从响应中获取 token:', res);
-                    throw new Error('登录失败：无法获取认证令牌');
-                }
-
-                this.token = token;
-                this.userInfo = user;
-
-                console.log('设置的用户信息:', this.userInfo);
-                console.log('解析的用户角色:', this.userRole);
-
-                localStorage.setItem('token', token);
-                localStorage.setItem('userInfo', JSON.stringify(user));
-                return res;
+                return response
             } catch (error) {
-                console.error('登录过程中发生错误:', error);
-                throw error;
+                console.error('登录错误:', error)
+                throw error
+            }
+        },
+
+        async getUserInfo() {
+            try {
+                console.log('请求用户信息...')
+                const response = await getUserInfo()
+                console.log('获取到用户信息:', response)
+                this.userInfo = response
+
+                // 如果用户信息中包含角色而状态中没有，则更新角色
+                if (response.roles && response.roles.length && this.roles.length === 0) {
+                    this.roles = response.roles
+                }
+
+                return response
+            } catch (error) {
+                console.error('获取用户信息失败:', error)
+                throw error
             }
         },
 
         async logout() {
             try {
-                await logoutApi()
-                this.token = ''
-                this.userInfo = {}
-                localStorage.removeItem('token')
-                localStorage.removeItem('userInfo')
+                await logout()
+                this.resetState()
             } catch (error) {
+                // 即使退出登录失败，也清空本地状态
+                this.resetState()
                 throw error
             }
+        },
+
+        resetState() {
+            this.token = ''
+            this.userInfo = null
+            this.roles = []
+            localStorage.removeItem('token')
         }
     }
 }) 

@@ -2,7 +2,7 @@ import axios from 'axios'
 import { ElMessage } from 'element-plus'
 
 const service = axios.create({
-    baseURL: '/api', // 使用代理地址
+    baseURL: '/api', // 使用代理地址，所有请求都会加上/api前缀
     timeout: 5000
 })
 
@@ -24,21 +24,13 @@ service.interceptors.request.use(
 // 响应拦截器
 service.interceptors.response.use(
     response => {
-        const res = response.data
-        if (res.code && res.code !== 200) {
-            ElMessage({
-                message: res.message || '错误',
-                type: 'error',
-                duration: 5 * 1000
-            })
-            return Promise.reject(new Error(res.message || '错误'))
-        }
-        return res
+        return response.data
     },
     error => {
         console.log('err' + error)
+        const errorMessage = error.response?.data?.message || error.message
         ElMessage({
-            message: error.message,
+            message: errorMessage,
             type: 'error',
             duration: 5 * 1000
         })

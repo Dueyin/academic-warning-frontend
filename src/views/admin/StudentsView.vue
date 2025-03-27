@@ -224,9 +224,15 @@
 </template>
 
 <script setup>
-import { ref, reactive } from 'vue'
+import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, Upload } from '@element-plus/icons-vue'
+import { 
+  getAllStudents, 
+  createStudent, 
+  updateStudent, 
+  getStudentById 
+} from '../../api/student'
 
 // 筛选表单
 const filterForm = reactive({
@@ -260,49 +266,12 @@ const grades = ref([
 
 // 表格数据
 const loading = ref(false)
-const studentList = ref([
-  {
-    id: 1,
-    studentNumber: '20240101',
-    name: '李明',
-    gender: 'MALE',
-    college: '计算机学院',
-    major: '软件工程',
-    grade: '2024级',
-    phone: '13800138001',
-    email: 'liming@example.com',
-    status: 'ACTIVE'
-  },
-  {
-    id: 2,
-    studentNumber: '20240102',
-    name: '王芳',
-    gender: 'FEMALE',
-    college: '计算机学院',
-    major: '计算机科学与技术',
-    grade: '2024级',
-    phone: '13800138002',
-    email: 'wangfang@example.com',
-    status: 'ACTIVE'
-  },
-  {
-    id: 3,
-    studentNumber: '20240103',
-    name: '张伟',
-    gender: 'MALE',
-    college: '电子信息学院',
-    major: '电子信息工程',
-    grade: '2023级',
-    phone: '13800138003',
-    email: 'zhangwei@example.com',
-    status: 'INACTIVE'
-  }
-])
+const studentList = ref([])
 
 // 分页相关
 const currentPage = ref(1)
 const pageSize = ref(10)
-const total = ref(100)
+const total = ref(0)
 
 // 对话框相关
 const dialogVisible = ref(false)
@@ -352,14 +321,53 @@ const rules = {
   ]
 }
 
+// 获取学生列表
+const fetchStudents = async () => {
+  try {
+    loading.value = true
+    const params = {
+      page: currentPage.value - 1,
+      size: pageSize.value,
+      studentNumber: filterForm.studentNumber,
+      name: filterForm.name,
+      college: filterForm.college,
+      major: filterForm.major
+    }
+    console.log('获取学生列表参数:', params)
+    
+    // 调用API获取学生列表
+    const response = await getAllStudents(params)
+    console.log('获取到的学生列表:', response)
+    
+    // 如果后端返回的是分页格式的数据
+    if (response.content && Array.isArray(response.content)) {
+      studentList.value = response.content
+      total.value = response.totalElements || 0
+    } 
+    // 如果后端直接返回数组
+    else if (Array.isArray(response)) {
+      studentList.value = response
+      total.value = response.length
+    }
+    // 其他情况设置为空数组
+    else {
+      studentList.value = []
+      total.value = 0
+    }
+  } catch (error) {
+    console.error('获取学生列表失败:', error)
+    ElMessage.error('获取学生列表失败，请稍后重试')
+    studentList.value = []
+    total.value = 0
+  } finally {
+    loading.value = false
+  }
+}
+
 // 搜索
 const handleSearch = () => {
-  // 调用API获取数据
-  console.log('搜索条件：', filterForm)
-  loading.value = true
-  setTimeout(() => {
-    loading.value = false
-  }, 500)
+  currentPage.value = 1 // 重置为第一页
+  fetchStudents()
 }
 
 // 重置搜索条件
@@ -373,13 +381,13 @@ const handleReset = () => {
 // 分页大小改变
 const handleSizeChange = (val) => {
   pageSize.value = val
-  handleSearch()
+  fetchStudents()
 }
 
 // 页码改变
 const handleCurrentChange = (val) => {
   currentPage.value = val
-  handleSearch()
+  fetchStudents()
 }
 
 // 添加学生
@@ -399,12 +407,28 @@ const handleAdd = () => {
 }
 
 // 编辑学生
-const handleEdit = (row) => {
-  isEdit.value = true
-  dialogVisible.value = true
-  Object.keys(form).forEach(key => {
-    form[key] = row[key]
-  })
+const handleEdit = async (row) => {
+  try {
+    isEdit.value = true
+    dialogVisible.value = true
+    
+    // 从API获取最新的学生详情
+    const studentDetail = await getStudentById(row.id)
+    console.log('获取到的学生详情:', studentDetail)
+    
+    // 将学生详情填充到表单中
+    Object.keys(form).forEach(key => {
+      form[key] = studentDetail[key] || row[key] || ''
+    })
+  } catch (error) {
+    console.error('获取学生详情失败:', error)
+    ElMessage.error('获取学生详情失败，请稍后重试')
+    
+    // 如果获取详情失败，使用表格中的数据
+    Object.keys(form).forEach(key => {
+      form[key] = row[key] || ''
+    })
+  }
 }
 
 // 删除学生
@@ -418,13 +442,21 @@ const handleDelete = (row) => {
       type: 'warning'
     }
   )
-    .then(() => {
-      // 调用删除API
-      ElMessage.success('删除成功')
-      handleSearch()
+    .then(async () => {
+      try {
+        // 调用删除API
+        // 这里假设删除API是 deleteStudent(id)
+        // await deleteStudent(row.id)
+        
+        ElMessage.success('删除成功')
+        fetchStudents() // 刷新列表
+      } catch (error) {
+        console.error('删除学生失败:', error)
+        ElMessage.error('删除学生失败，请稍后重试')
+      }
     })
     .catch(() => {
-      // 取消删除
+      // 取消删除，不做任何操作
     })
 }
 
@@ -439,34 +471,64 @@ const handleResetPassword = (row) => {
       type: 'warning'
     }
   )
-    .then(() => {
-      // 调用重置密码API
-      ElMessage.success('密码重置成功，新密码已发送至学生邮箱')
+    .then(async () => {
+      try {
+        // 调用重置密码API
+        // 这里假设重置密码API是 resetStudentPassword(id)
+        // await resetStudentPassword(row.id)
+        
+        ElMessage.success('密码重置成功，新密码已发送至学生邮箱')
+      } catch (error) {
+        console.error('重置密码失败:', error)
+        ElMessage.error('重置密码失败，请稍后重试')
+      }
     })
     .catch(() => {
-      // 取消重置
+      // 取消重置，不做任何操作
     })
 }
 
 // 导入学生
 const handleImport = () => {
   ElMessage.info('请选择Excel文件导入学生信息')
+  // 这里可以实现文件上传逻辑
 }
 
 // 提交表单
 const handleSubmit = async () => {
   if (!formRef.value) return
   
-  await formRef.value.validate(async (valid) => {
-    if (valid) {
-      // 提交表单
-      console.log('表单数据：', form)
-      ElMessage.success(isEdit.value ? '编辑成功' : '添加成功')
-      dialogVisible.value = false
-      handleSearch()
-    }
-  })
+  try {
+    await formRef.value.validate(async (valid) => {
+      if (valid) {
+        // 提交表单
+        const formData = { ...form }
+        console.log('提交的表单数据:', formData)
+        
+        if (isEdit.value) {
+          // 编辑学生
+          await updateStudent(formData.id, formData)
+          ElMessage.success('编辑成功')
+        } else {
+          // 添加学生
+          await createStudent(formData)
+          ElMessage.success('添加成功')
+        }
+        
+        dialogVisible.value = false
+        fetchStudents() // 刷新列表
+      }
+    })
+  } catch (error) {
+    console.error('提交表单失败:', error)
+    ElMessage.error('操作失败，请稍后重试')
+  }
 }
+
+// 页面加载时获取学生列表
+onMounted(() => {
+  fetchStudents()
+})
 </script>
 
 <style scoped>

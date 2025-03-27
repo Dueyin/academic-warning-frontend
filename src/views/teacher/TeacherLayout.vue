@@ -8,24 +8,24 @@
         :collapse="isCollapse"
         :collapse-transition="false"
       >
-        <el-menu-item index="/admin">
+        <el-menu-item index="/teacher">
           <el-icon><Monitor /></el-icon>
           <template #title>仪表盘</template>
         </el-menu-item>
         
-        <el-menu-item index="/admin/students">
+        <el-menu-item index="/teacher/profile">
           <el-icon><User /></el-icon>
-          <template #title>学生管理</template>
+          <template #title>个人信息</template>
         </el-menu-item>
         
-        <el-menu-item index="/admin/warnings">
+        <el-menu-item index="/teacher/classes">
+          <el-icon><Document /></el-icon>
+          <template #title>班级管理</template>
+        </el-menu-item>
+
+        <el-menu-item index="/teacher/warnings">
           <el-icon><Warning /></el-icon>
           <template #title>预警管理</template>
-        </el-menu-item>
-        
-        <el-menu-item index="/admin/settings">
-          <el-icon><Setting /></el-icon>
-          <template #title>系统设置</template>
         </el-menu-item>
       </el-menu>
     </el-aside>
@@ -73,8 +73,8 @@ import { ElMessage } from 'element-plus'
 import {
   Monitor,
   User,
+  Document,
   Warning,
-  Setting,
   Expand,
   Fold,
   ArrowDown
